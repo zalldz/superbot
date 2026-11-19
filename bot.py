@@ -106,6 +106,7 @@ DEFAULT_CONFIG = {
     "morning_digest": "",         # "07:00": daily health+cost digest, no AI tokens
     "undo_keep": 20,              # rounds of Edit/Write snapshots kept for /undo and /diff
     "confirm_timeout": 600,       # seconds to wait for ✅; no answer = that step is skipped, the rest goes on
+    "fleet": {},                  # {"spokes": {"name": "ssh-alias"}, "key": "~/.ssh/fleet_ed25519"}: read-only /fleet
     "memory_dir": "",             # custom memory dir; empty = ~/.config/superbot/memory.
                                   # set it to your terminal Claude memory dir to share one brain
     "env_file": "",               # optional shell rc (e.g. "~/.zshrc") — ANTHROPIC_* exports are
@@ -646,7 +647,7 @@ def run_quick(chat_id: str, cmd: str):
 
 
 def menu_keyboard() -> dict:
-    keys = [*CONFIG["quick_commands"], "/new", "/usage", "/cost", "/undo", "/diff", "/jobs", "/find", "/ro", "/model", "/health"]
+    keys = [*CONFIG["quick_commands"], "/new", "/usage", "/cost", "/undo", "/diff", "/jobs", "/find", "/fleet", "/ro", "/model", "/health"]
     return {"keyboard": [[{"text": k} for k in keys[i:i + 3]] for i in range(0, len(keys), 3)],
             "resize_keyboard": True, "is_persistent": True}
 
@@ -1436,6 +1437,40 @@ def find_report(q: str) -> str:
     return "\n".join(hits) if hits else _s("find_none", q=q)
 
 
+def fleet_report(arg: str) -> str:
+    """/fleet: read-only look at spoke superbots over SSH (restricted key -> fleet-read). One-way: spokes never see the hub."""
+    fl = CONFIG["fleet"]
+    spokes, key = fl.get("spokes", {}), os.path.expanduser(fl.get("key", "~/.ssh/fleet_ed25519"))
+    if not spokes:
+        return "fleet: no spokes in config (`fleet.spokes`)"
+
+    def ask(name: str, *args: str) -> str:
+        r = subprocess.run(["ssh", "-i", key, "-o", "IdentitiesOnly=yes", "-o", "BatchMode=yes", "-o", "ConnectTimeout=8",
+                            spokes[name], shlex.join(args)], capture_output=True, text=True, timeout=40)
+        return (r.stdout or r.stderr).strip() or "(empty)"
+
+    def safe(name: str, *args: str) -> str:
+        try:
+            return ask(name, *args)
+        except Exception as e:
+            return f"❌ {type(e).__name__}"
+
+    from concurrent.futures import ThreadPoolExecutor
+    parts = arg.split(maxsplit=1)
+    if not arg:
+        with ThreadPoolExecutor(8) as ex:
+            res = list(ex.map(lambda n: safe(n, "status"), spokes))
+        return redact("\n".join(f"• *{n}*: {r}" for n, r in zip(spokes, res)))
+    if parts[0] == "find" and len(parts) > 1:
+        with ThreadPoolExecutor(8) as ex:
+            res = list(ex.map(lambda n: safe(n, "find", parts[1]), spokes))
+        return redact("\n\n".join(f"*{n}*\n{r}" for n, r in zip(spokes, res)))
+    if parts[0] in spokes:
+        sub = parts[1].split(maxsplit=1) if len(parts) > 1 else ["list"]
+        return redact(safe(parts[0], *sub)[:3500])
+    return "Pakai: /fleet · /fleet <nama> [list|cat <path>] · /fleet find <kata>"
+
+
 def react(chat_id: str, mid: int, emoji: str = SEEN):
     try:
         tg_json("setMessageReaction", {"chat_id": chat_id, "message_id": mid,
@@ -1489,6 +1524,8 @@ def handle_command(chat_id: str, text: str) -> bool:
         threading.Thread(target=lambda: send(chat_id, jobs_report(arg)), daemon=True).start()
     elif cmd == "/find":
         threading.Thread(target=lambda: send(chat_id, find_report(arg)), daemon=True).start()
+    elif cmd == "/fleet":
+        threading.Thread(target=lambda: send(chat_id, fleet_report(arg)), daemon=True).start()
     elif cmd == "/ro":
         on = arg != "off" if arg else not load_state().get("ro")
         update_state(ro=on)

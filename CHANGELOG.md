@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.7.0 — 2026-11-20
+
+- Fleet (hub → spokes, one way): `/fleet` (status of every spoke), `/fleet <name>` (list memories),
+  `/fleet <name> cat <path>`, `/fleet find <word>` (memories + transcripts on all spokes). Nothing is pulled
+  until asked. Config: `fleet: {"spokes": {"name": "ssh-alias"}, "key": "~/.ssh/fleet_ed25519"}`
+- `fleet-read`: the only thing a spoke needs. Read-only script forced through `command=",restrict"` on a
+  dedicated hub key, so the key cannot run anything else. Output goes through `redact()`
+
 ## 2.6.0 — 2026-11-20
 
 - A round killed by a signal (SIGKILL from the RAM cap) now says so, with the peak RSS of claude and its

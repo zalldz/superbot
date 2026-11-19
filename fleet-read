@@ -1,0 +1,68 @@
+#!/usr/bin/env python3
+"""fleet-read: read-only knowledge endpoint for a superbot hub (forced via authorized_keys command=).
+Subcommands (from SSH_ORIGINAL_COMMAND): status | list | cat <path> | find <word>. Never writes, never execs input."""
+import glob, os, re, shlex, sys, time
+
+HOME = os.path.expanduser("~")
+ROOTS = [f"{HOME}/.claude/projects/*/memory", f"{HOME}/.hermes/memories", f"{HOME}/.config/superbot/memory",
+         f"{HOME}/.hermes/office/knowledge/handoff"]
+MAX_CAT, MAX_HITS = 20000, 8
+
+
+def mem_files():
+    out = []
+    for pat in ROOTS:
+        for d in glob.glob(pat):
+            if "remember-summarizer" in d:
+                continue
+            out += [f for f in glob.glob(f"{d}/*") if f.endswith((".md", ".txt")) and os.path.isfile(f)]
+    return sorted(set(out))
+
+
+def main():
+    try:
+        argv = shlex.split(os.environ.get("SSH_ORIGINAL_COMMAND", ""))
+    except ValueError:
+        argv = []
+    cmd, args = (argv[0] if argv else "status"), argv[1:]
+    files = mem_files()
+    if cmd == "status":
+        tr = glob.glob(f"{HOME}/.claude/projects/*/*.jsonl")
+        last = max((os.path.getmtime(f) for f in files + tr), default=0)
+        print(f"host={os.uname().nodename} memories={len(files)} transcripts={len(tr)} "
+              f"newest={time.strftime('%Y-%m-%d %H:%M', time.localtime(last)) if last else '-'}")
+    elif cmd == "list":
+        for f in files:
+            line = ""
+            try:
+                m = re.search(r"^description:\s*(.+)$", open(f, errors="replace").read(4000), re.M)
+                line = m.group(1)[:100] if m else ""
+            except OSError:
+                pass
+            print(f"{f.replace(HOME, '~')} — {line}")
+    elif cmd == "cat" and args:
+        p = os.path.realpath(os.path.expanduser(args[0]))
+        if p not in {os.path.realpath(f) for f in files}:
+            sys.exit("not allowed")
+        print(open(p, errors="replace").read(MAX_CAT))
+    elif cmd == "find" and args:
+        q, hits = " ".join(args).lower(), 0
+        tr = sorted(glob.glob(f"{HOME}/.claude/projects/*/*.jsonl"), key=os.path.getmtime, reverse=True)[:300]
+        end = time.time() + 20
+        for f in files + tr:
+            if hits >= MAX_HITS or time.time() > end:
+                break
+            try:
+                body = open(f, errors="replace").read()
+            except OSError:
+                continue
+            i = body.lower().find(q)
+            if i >= 0:
+                hits += 1
+                snip = re.sub(r"\s+", " ", body[max(0, i - 60): i + len(q) + 80])
+                print("%s …%s…" % (f.replace(HOME, "~")[-60:], snip))
+    else:
+        sys.exit("usage: status | list | cat <path> | find <word>")
+
+
+main()
