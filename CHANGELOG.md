@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.6.0 — 2026-11-20
+
+- A round killed by a signal (SIGKILL from the RAM cap) now says so, with the peak RSS of claude and its
+  tool children (sampled every 2 s from /proc), instead of a bare "claude exit -9"
+- A message sent while Claude is busy gets "⏳ Queued (#n)"; `/cancel` = `/stop`
+- `/find <word>`: case-insensitive search over memories and past session transcripts, no AI round
+
 ## 2.5.0 — 2026-11-20
 
 - Grounding: the prompt carries today's date and the bot's own code/docs path, with the rule to read

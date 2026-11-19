@@ -76,6 +76,8 @@ can read the machine's journal) becomes the owner; everyone else is refused.
 | `/id` | chat id, session id, model, context size, how to continue in terminal |
 | `/health` | on-demand server check: disk, systemd units, docker |
 | `/usage` | cost, turns, duration, tokens (today / 7 days / total) |
+| `/find <word>` | search memories + past transcripts, no AI round |
+| `/cancel` | same as `/stop` |
 | `!message` | run this message on the heavy model (`auto_model.heavy`) |
 | reply to an old answer | continue that task's session instead of the current one |
 | send a photo | Claude looks at it (vision) |

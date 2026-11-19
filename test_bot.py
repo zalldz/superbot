@@ -698,6 +698,45 @@ def test_undo_diff_stop_cost_ro():
     os.environ.pop("SUPERBOT_ROUND")
 
 
+def test_oom_find_queue():
+    d = _tmp_cfg("oom")
+    restore = _workspace(d)
+    # round killed by SIGKILL (RAM cap) with no result → explicit reason, not a bare exit code
+    class Killed(FakePopen):
+        def __init__(self, cmd, **kw):
+            super().__init__(cmd, **kw)
+            self.returncode = -9
+    orig_popen, orig_tg = bot.subprocess.Popen, bot.tg
+    FakePopen.script, FakePopen.calls = [(lambda c: True, ["boom\n"])], []
+    bot.subprocess.Popen, bot.tg = Killed, (lambda m, **p: {"result": {"message_id": 1}})
+    reply, _, ok = bot.run_claude("x", ephemeral=True)
+    bot.subprocess.Popen, bot.tg = orig_popen, orig_tg
+    assert not ok and "MemoryMax" in reply
+    assert bot.pg_rss_mb(os.getpgrp()) > 0                  # sampler reads real /proc
+    # /find: memory file hit, no hit, usage
+    open(f"{d}/note.md", "w").write("server cisa pakai nginx dan MySQL")
+    assert "note.md" in bot.find_report("NGINX")
+    assert bot.find_report("zzqq") == bot._s("find_none", q="zzqq")
+    assert "find" in bot.find_report("").lower()
+    # queued notice only when something is already running
+    sent = []
+    o = bot.owner_chat_id, bot.send, bot.react
+    bot.owner_chat_id, bot.send, bot.react = (lambda: "42"), (lambda c, t, reply_to=None: sent.append(t) or []), (lambda *a, **k: None)
+    while not bot.JOBS.empty():
+        bot.JOBS.get()
+    m = lambda i: {"message": {"chat": {"id": 42, "type": "private"}, "message_id": i, "text": "halo"}}
+    bot.handle_update(m(1))
+    assert not sent
+    bot.BUSY.set()
+    bot.handle_update(m(2))
+    bot.BUSY.clear()
+    assert len(sent) == 1 and "#" in sent[0]
+    while not bot.JOBS.empty():
+        bot.JOBS.get()
+    bot.owner_chat_id, bot.send, bot.react = o
+    restore()
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_"):

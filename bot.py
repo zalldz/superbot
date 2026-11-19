@@ -34,6 +34,7 @@ Private chat with the owner only. stdlib only. Python >= 3.10.
 """
 import difflib
 import fcntl
+import glob
 import json
 import os
 import queue
@@ -145,6 +146,10 @@ STRINGS = {
         "usage_total": "total",
         "usage_empty": "(no usage recorded yet 📊)",
         "timeout": "(claude timed out after {t}s — try again / narrow the question)",
+        "oom": "💥 Round killed (signal {sig}) — most likely the RAM cap (MemoryMax). Peak: ~{peak} MB. Try a smaller task.",
+        "queued": "⏳ Queued (#{n}) — will run after the current round. /stop drops the queue.",
+        "find_usage": "Usage: /find <word>",
+        "find_none": "Nothing found for: {q}",
         "stopped": "⏹ Stopped.",
         "nothing_running": "Nothing is running.",
         "rotating": "🧠 Saving lessons from the old session…",
@@ -189,6 +194,10 @@ STRINGS = {
         "usage_total": "total",
         "usage_empty": "(belum ada data pemakaian 📊)",
         "timeout": "(claude timeout {t}s — coba lagi / persempit pertanyaan)",
+        "oom": "💥 Ronde dibunuh (sinyal {sig}) — kemungkinan kena batas RAM (MemoryMax). Puncak: ~{peak} MB. Coba tugas lebih kecil.",
+        "queued": "⏳ Antre (#{n}) — jalan setelah ronde ini. /stop buang antrean.",
+        "find_usage": "Pakai: /find <kata>",
+        "find_none": "Gak ketemu: {q}",
         "stopped": "⏹ Dihentikan.",
         "nothing_running": "Gak ada yang lagi jalan.",
         "rotating": "🧠 Menyimpan pelajaran dari session lama…",
@@ -637,7 +646,7 @@ def run_quick(chat_id: str, cmd: str):
 
 
 def menu_keyboard() -> dict:
-    keys = [*CONFIG["quick_commands"], "/new", "/usage", "/cost", "/undo", "/diff", "/jobs", "/ro", "/model", "/health"]
+    keys = [*CONFIG["quick_commands"], "/new", "/usage", "/cost", "/undo", "/diff", "/jobs", "/find", "/ro", "/model", "/health"]
     return {"keyboard": [[{"text": k} for k in keys[i:i + 3]] for i in range(0, len(keys), 3)],
             "resize_keyboard": True, "is_persistent": True}
 
@@ -658,6 +667,21 @@ def transcribe(path: str) -> str:
     except Exception as e:   # loaded per call on purpose: frees RAM on a small box
         print(f"transcribe failed: {e}", flush=True)
         return ""
+
+
+def pg_rss_mb(pgid: int) -> int:
+    """Total RSS (MB) of every process in process group `pgid` (claude + its tool children)."""
+    pages = 0
+    for p in os.listdir("/proc"):
+        if not p.isdigit():
+            continue
+        try:
+            st = open(f"/proc/{p}/stat").read().rsplit(")", 1)[1].split()
+            if int(st[2]) == pgid:                    # st[2] = pgrp (field 5 overall)
+                pages += int(st[21])                  # st[21] = rss in pages (field 24)
+        except (OSError, ValueError, IndexError):
+            continue
+    return pages * os.sysconf("SC_PAGE_SIZE") // (1 << 20)
 
 
 def run_claude(text: str, chat_id: str = "", model: str = "", ephemeral: bool = False,
@@ -711,6 +735,17 @@ def run_claude(text: str, chat_id: str = "", model: str = "", ephemeral: bool = 
                                 start_new_session=True)   # own process group: /stop kills tool children too
         if not ephemeral:
             CURRENT["proc"] = proc
+        peak = [0]
+        done = threading.Event()
+
+        def _sample():
+            while not done.wait(2):
+                try:
+                    peak[0] = max(peak[0], pg_rss_mb(proc.pid))
+                except Exception:
+                    pass
+        if isinstance(getattr(proc, "pid", None), int):
+            threading.Thread(target=_sample, daemon=True).start()
         killer = threading.Timer(TIMEOUT, lambda: (timed_out.set(), kill_tree(proc)))
         killer.start()
         try:
@@ -738,6 +773,7 @@ def run_claude(text: str, chat_id: str = "", model: str = "", ephemeral: bool = 
             kill_tree(proc)
         finally:
             killer.cancel()
+            done.set()
             stop_typing.set()
             CURRENT.pop("proc", None) if not ephemeral else None
             if prog:
@@ -756,6 +792,8 @@ def run_claude(text: str, chat_id: str = "", model: str = "", ephemeral: bool = 
         print(f"session {sid} gone, starting fresh", flush=True)
         os.remove(SESSION_FILE)
         return run_claude(text, chat_id, model, ephemeral, "", _retry=False)
+    if result is None and isinstance(proc.returncode, int) and proc.returncode in (-9, 137, -15):
+        return _s("oom", sig=abs(proc.returncode) % 128, peak=peak[0] or "?"), sid, False
     if result is None:
         return out[:8000] or f"(claude exit {proc.returncode})", sid, False
     reply = (result.get("result") or "").strip() or f"(claude exit {proc.returncode}, no output)"
@@ -1376,6 +1414,28 @@ def cli(argv: list[str]) -> bool:
 SEEN, WORKING, DONE, FAILED = "👀", "👨‍💻", "👍", "💔"
 
 
+def find_report(q: str) -> str:
+    """/find: case-insensitive search in memories, then in past session transcripts (newest first)."""
+    if not q:
+        return _s("find_usage")
+    ql, hits, t_end = q.lower(), [], time.time() + 25
+    tdir = os.path.expanduser("~/.claude/projects/-" + HOME.strip("/").replace("/", "-"))
+    files = sorted(glob.glob(f"{MEMORY_DIR}/*.md"))
+    files += sorted(glob.glob(f"{tdir}/*.jsonl"), key=os.path.getmtime, reverse=True)[:400]
+    for f in files:
+        if len(hits) >= 8 or time.time() > t_end:
+            break
+        try:
+            body = open(f, errors="replace").read()
+        except OSError:
+            continue
+        i = body.lower().find(ql)
+        if i >= 0:
+            snip = re.sub(r"\s+", " ", body[max(0, i - 60): i + len(q) + 80])
+            hits.append(f"• `{os.path.basename(f)[:40]}` …{snip}…")
+    return "\n".join(hits) if hits else _s("find_none", q=q)
+
+
 def react(chat_id: str, mid: int, emoji: str = SEEN):
     try:
         tg_json("setMessageReaction", {"chat_id": chat_id, "message_id": mid,
@@ -1390,7 +1450,7 @@ def handle_command(chat_id: str, text: str) -> bool:
     cmd, arg = cmd.split("@")[0], arg.strip()
     if cmd == "/new":
         JOBS.put(("rotate", chat_id))
-    elif cmd == "/stop":
+    elif cmd in ("/stop", "/cancel"):
         send(chat_id, _s("stopped") if stop_current() else _s("nothing_running"))
     elif cmd == "/model":
         if not arg:
@@ -1427,6 +1487,8 @@ def handle_command(chat_id: str, text: str) -> bool:
         send(chat_id, diff_last())
     elif cmd == "/jobs":
         threading.Thread(target=lambda: send(chat_id, jobs_report(arg)), daemon=True).start()
+    elif cmd == "/find":
+        threading.Thread(target=lambda: send(chat_id, find_report(arg)), daemon=True).start()
     elif cmd == "/ro":
         on = arg != "off" if arg else not load_state().get("ro")
         update_state(ro=on)
@@ -1504,6 +1566,8 @@ def handle_update(u: dict):
                "what was said." if msg.get("voice") or msg.get("audio") or msg.get("video_note")
                else "Read it with the appropriate tool, then respond.")
         text = f"The user sent a file: {path}\n{how}" + (f"\n\nMessage: {text}" if text else "")
+    if BUSY.is_set() or not JOBS.empty():
+        send(chat_id, _s("queued", n=JOBS.qsize() + 1), reply_to=mid)
     JOBS.put(("msg", chat_id, text, mid, opts))
 
 
