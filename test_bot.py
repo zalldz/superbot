@@ -472,6 +472,18 @@ def test_claude_slot_serializes():
     os.environ.pop("SUPERBOT_ROUND")
 
 
+def test_prompt_grounds_in_own_code():
+    """Questions about itself are answered from its code/docs, not from old memory or handoff."""
+    d = _tmp_cfg("ground")
+    restore = _workspace(d)
+    open(bot.HANDOFF_MD, "w").write("old note")
+    sp = bot.system_prompt()
+    assert os.path.dirname(bot.SELF) in sp and "CHANGELOG.md" in sp and time.strftime("%Y-%m-%d") in sp
+    assert "may be outdated" in sp and "old note" in sp
+    assert "Only facts you verified" in bot.REFLECT_PROMPT
+    restore()
+
+
 def test_templates_fit_prompt_cap():
     """Workspace files are cut at FILE_CAP chars in the prompt: shipped templates must fit whole."""
     for n in os.listdir(bot.TEMPLATES_DIR):

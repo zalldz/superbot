@@ -2,6 +2,10 @@
 
 ## 2.5.0 — 2026-11-20
 
+- Grounding: the prompt carries today's date and the bot's own code/docs path, with the rule to read
+  them for questions about itself; the handoff note is labelled "may be outdated"; the reflection keeps
+  only verified facts (a stale handoff once made the bot re-propose fixes that already existed)
+
 - Example `confirm_patterns` also ask before `kill`/`pkill`/`killall`, `find … -delete` and deleting
   under `.claude/` (a self-made "cleanup timer" once killed another agent's processes and deleted
   session history)

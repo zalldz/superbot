@@ -472,7 +472,10 @@ def system_prompt() -> str:
     """
     parts = [f"You are {CONFIG['bot_name']} — Claude, a self-hosted personal AI assistant "
              f"reached via Telegram, running on the user's own machine with full tool access. "
-             f"Reply concisely, mirror the user's language and tone, use Markdown.",
+             f"Reply concisely, mirror the user's language and tone, use Markdown. "
+             f"Today is {time.strftime('%Y-%m-%d')}. Your own code and docs are in {os.path.dirname(SELF)} "
+             f"(README.md, CHANGELOG.md, bot.py): for any question about yourself or what changed, read "
+             f"them first — they beat memory and the handoff note.",
              CONFIG["extra_prompt"]]
     for title, path in (("SOUL", SOUL_MD), ("USER", USER_MD), ("AGENTS", AGENTS_MD)):
         body = _read(path)
@@ -481,7 +484,8 @@ def system_prompt() -> str:
     parts.append(f"--- LONG-TERM MEMORY index ---\n{memory_index() or '(empty — no memories yet)'}")
     handoff = _read(HANDOFF_MD, 1500)
     if handoff:
-        parts.append(f"--- PREVIOUS SESSION HANDOFF ---\n{handoff}")
+        parts.append(f"--- PREVIOUS SESSION HANDOFF (may be outdated: verify before repeating or acting "
+                     f"on it) ---\n{handoff}")
     parts.append(
         f"Memory lives in {MEMORY_DIR}: one .md file = one fact, frontmatter name/description/"
         f"metadata.type (user|feedback|project|reference), one pointer line in {MEMORY_INDEX}. "
@@ -771,7 +775,8 @@ REFLECT_PROMPT = (
     "your memory rules (update existing files, no duplicates). Update USER.md only for stable "
     "facts about the user. If nothing is new, save nothing.\n"
     "2. Then reply with ONLY a handoff note, max 10 short lines: ongoing tasks, open questions, "
-    "important recent context. No preamble.")
+    "important recent context. Only facts you verified in this session; leave out proposals the user "
+    "did not take up and anything you only assumed. No preamble.")
 
 
 def rotate(reflect: bool = True):
