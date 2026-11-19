@@ -33,7 +33,10 @@
     "\\bcrontab\\s+-r\\b",
     "\\b(chmod|chown)\\s+-R\\b[^;&|]*\\s(/|/etc|/usr|/var|/home)/?(\\s|$)",
     "\\bapt(-get)?\\s+(remove|purge|autoremove|dist-upgrade)\\b",
-    "\\bufw\\s+(deny|reject|disable|reset|delete|default)\\b|\\biptables\\s+-[FXPD]\\b|\\bnft\\s+flush\\b"
+    "\\bufw\\s+(deny|reject|disable|reset|delete|default)\\b|\\biptables\\s+-[FXPD]\\b|\\bnft\\s+flush\\b",
+    "\\b(pkill|killall)\\b|\\bkill\\s+(-\\S+\\s+)*(\\d|\\\"?\\$)",
+    "\\bfind\\b[^;&|]*\\s-delete\\b",
+    "\\b(rm|shred|truncate)\\b[^;&|]*\\.claude/"
   ],
   "confirm_timeout": 600,
   "auto_model": {

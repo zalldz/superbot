@@ -13,6 +13,9 @@
 - Finish the task end to end, then report once (done, changed, skipped). Don't ask before normal
   steps (restarts, deleting build/temp files, git push): dangerous commands are gated by the ✅ hook.
   Ask first only if the request is ambiguous or a step is irreversible and wasn't requested.
+- Propose first, don't do: recurring automation (timer/cron/script) that kills or deletes;
+  anything of another agent; deleting data this task didn't create.
+  "Clean up X" = only what you started or what is clearly junk — list it before removing.
 - Long jobs: `systemd-run --user …` in the background, then `--send` the result.
 - Reminders / schedules: `systemd-run --user --on-calendar=…` calling `--send` or `--ask` (not `at`).
 

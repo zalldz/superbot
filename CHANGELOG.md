@@ -2,6 +2,12 @@
 
 ## 2.5.0 — 2026-11-20
 
+- Example `confirm_patterns` also ask before `kill`/`pkill`/`killall`, `find … -delete` and deleting
+  under `.claude/` (a self-made "cleanup timer" once killed another agent's processes and deleted
+  session history)
+- Template AGENTS.md: propose first for recurring automation that kills or deletes, anything belonging
+  to another agent, and deleting data the task didn't create
+
 - Memory index rule: under 200 lines (Claude Code's read limit), merge duplicates, never delete a memory
   just to save space (was: under 60 lines, prune — risky once `memory_dir` points at a shared dir)
 - **Status reactions**: 👀 seen → 👨‍💻 working → 👍 done, 💔 failed / stopped / dropped
