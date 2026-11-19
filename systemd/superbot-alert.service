@@ -1,0 +1,6 @@
+[Unit]
+Description=Superbot - proactive alert check (disk/failed units/docker)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 %h/.local/share/superbot/alert_check.py

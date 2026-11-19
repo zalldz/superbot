@@ -1,0 +1,48 @@
+{
+  "bot_name": "Superbot",
+  "lang": "en",
+  "extra_prompt": "",
+  "permission_mode": "bypassPermissions",
+  "claude_env": {},
+  "model": "",
+  "memory_dir": "",
+  "env_file": "",
+  "claude_args": [
+    "--setting-sources",
+    "local",
+    "--strict-mcp-config",
+    "--disable-slash-commands"
+  ],
+  "progress": true,
+  "rotate_tokens": 60000,
+  "idle_hours": 8,
+  "reflect_model": "haiku",
+  "heartbeat_minutes": 0,
+  "heartbeat_model": "haiku",
+  "media_days": 7,
+  "confirm_patterns": [
+    "\\brm\\s+(-\\S+\\s+)*-\\w*[rR]\\w*\\s+(-\\S+\\s+)*(\\S+\\s+)*(/|~/?|\\$HOME/?|/\\w+/?|/home/\\w+/?|\\*)(\\s|$)",
+    "--no-preserve-root",
+    "\\b(mkfs\\S*|wipefs|fdisk|parted|sgdisk)\\b",
+    "\\bdd\\b[^|;&]*\\bof=/dev/",
+    "(^|[;&|(]\\s*|\\bsudo\\s+)(reboot|shutdown|poweroff|halt)\\b|\\bsystemctl\\s+(reboot|poweroff|halt|kexec)\\b",
+    "\\bdocker\\s+(system\\s+prune|volume\\s+(rm|prune)|compose\\s+down\\b[^;&|]*\\s-v\\b)",
+    "\\bgit\\s+push\\b[^;&|]*\\s(-f|--force|--force-with-lease)\\b|\\bgit\\s+(reset\\s+--hard|clean\\s+-\\w*f)",
+    "\\b(curl|wget)\\b[^|;]*\\|\\s*(sudo\\s+)?(ba|z)?sh\\b",
+    "(?i)\\b(drop\\s+(table|database|schema)|truncate\\s+table)\\b",
+    "\\bcrontab\\s+-r\\b",
+    "\\b(chmod|chown)\\s+-R\\b[^;&|]*\\s(/|/etc|/usr|/var|/home)/?(\\s|$)",
+    "\\bapt(-get)?\\s+(remove|purge|autoremove|dist-upgrade)\\b",
+    "\\bufw\\s+(deny|reject|disable|reset|delete|default)\\b|\\biptables\\s+-[FXPD]\\b|\\bnft\\s+flush\\b"
+  ],
+  "confirm_timeout": 600,
+  "auto_model": {
+    "light": "sonnet",
+    "heavy": "opus"
+  },
+  "quick_commands": {
+    "/disk": "df -h /",
+    "/mem": "free -h"
+  },
+  "whisper_model": "base"
+}

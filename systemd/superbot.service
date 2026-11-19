@@ -1,0 +1,17 @@
+[Unit]
+Description=Superbot — self-hosted Claude Code bridge for Telegram
+After=network-online.target
+
+[Service]
+WorkingDirectory=%h/.local/share/superbot
+ExecStart=/usr/bin/python3 %h/.local/share/superbot/bot.py
+Restart=on-failure
+RestartSec=5
+# Claude Code (+ its tools) runs inside this cgroup: past the cap only this round dies, not the server.
+# 4 GB box: ~400 MB per claude round; raise on bigger machines.
+MemoryHigh=900M
+MemoryMax=1200M
+MemorySwapMax=256M
+
+[Install]
+WantedBy=default.target
